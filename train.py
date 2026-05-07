@@ -3,20 +3,23 @@ from torch import optim
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
-from torchvision.transforms import ToTensor
+from torchvision import transforms
+
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Resize((64, 64))
+])
 
 training_data = datasets.OxfordIIITPet(
     root='root', 
     split='trainval',
     download=True,
-    transform=ToTensor(),
+    transform=transform,
 )
 
 batch_size = 32
-
 train_dataloader = DataLoader(training_data, batch_size=batch_size)
 
-# Using GPU or CPU?
 device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
 print(f"Using {device} device")
 
@@ -34,7 +37,7 @@ class NeuralNetwork(nn.Module):
         )
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64 * 7 * 7, 37),
+            nn.Linear(64 * 16 * 16, 37),
         ) 
 
     def forward(self, x):
