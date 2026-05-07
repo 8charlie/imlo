@@ -41,3 +41,17 @@ class NeuralNetwork(nn.module):
         x = self.conv_stack(x)
         logits = self.classifier(x)
         return logits
+
+def train(dataloader, model, loss_fn, optimizer, epochs):
+    size = len(dataloader.dataset)
+    model.train()
+    for epoch in epochs(): 
+        for batch, (X, y) in enumerate(dataloader):
+            optimizer.zero_grad()
+
+            X, y = X.to(device), y.to(device)
+            pred = model(X)
+            loss = loss_fn(pred, y)
+        
+            loss.backward()
+            optimizer.step()
