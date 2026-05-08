@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import v2
 
-transform = v2.Compose([
+transforms = v2.Compose([
     v2.Resize((80, 80)),
     v2.RandomCrop(size=(64, 64)),
     v2.ToTensor(),
@@ -15,6 +15,7 @@ class Config:
     batch_size = 32
     epochs = 5
     lr = 1e-4
+    num_classes = 37
 
 class PetClassifier(nn.Module):
     def __init__(self):
@@ -30,7 +31,7 @@ class PetClassifier(nn.Module):
         )
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.LazyLinear(num_classes)
+            nn.LazyLinear(Config.num_classes)
         ) 
 
     def forward(self, x):
@@ -38,7 +39,7 @@ class PetClassifier(nn.Module):
         logits = self.classifier(x)
         return logits
 
-def train(dataloader, model, loss_fn, optimizer, epochs):
+def train_loop(dataloader, model, loss_fn, optimizer, epochs):
     model.train()
     for epoch in range(epochs): 
         for batch, (X, y) in enumerate(dataloader):
@@ -58,9 +59,8 @@ if __name__ == "__main__":
         root='data', 
         split='trainval',
         download=True,
-        transform=transform,
+        transform=transforms,
     )
-    num_classes = len(training_data.classes)
     train_dataloader = DataLoader(training_data, batch_size=Config.batch_size, shuffle=True)
 
     model = PetClassifier().to(device)
@@ -72,6 +72,6 @@ if __name__ == "__main__":
         weight_decay = 0.01,
     )
     loss_fn = nn.CrossEntropyLoss()
+    train_loop(train_dataloader, model, loss_fn, optimizer, epochs=5)
 
-    train(train_dataloader, model, loss_fn, optimizer, epochs=5)
     torch.save(model.state_dict(), "model.pth")
