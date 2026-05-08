@@ -12,7 +12,7 @@ transform = v2.Compose([
 ])
 
 training_data = datasets.OxfordIIITPet(
-    root='root', 
+    root='data', 
     split='trainval',
     download=True,
     transform=transform,

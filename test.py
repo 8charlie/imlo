@@ -6,4 +6,4 @@ from torchvision import datasets
 from torchvision import transforms
 
 test = datasets.OxfordIIITPet(
-    'root', 'test')
+    'data', 'test')
