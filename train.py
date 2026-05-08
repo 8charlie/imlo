@@ -3,11 +3,12 @@ from torch import optim
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
-from torchvision import transforms
+from torchvision.transforms import v2
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize((64, 64))
+transform = v2.Compose([
+    v2.RandomCrop(size=(64, 64)),
+    v2.Resize((64, 64)),
+    v2.ToTensor(),
 ])
 
 training_data = datasets.OxfordIIITPet(
@@ -15,6 +16,7 @@ training_data = datasets.OxfordIIITPet(
     split='trainval',
     download=True,
     transform=transform,
+    #shuffle=True,
 )
 
 batch_size = 32
@@ -70,3 +72,4 @@ optimizer = optim.AdamW(
 loss_fn = nn.CrossEntropyLoss()
 
 train(train_dataloader, model, loss_fn, optimizer, epochs=5)
+torch.save(model.state_dict(), "model.pth")
