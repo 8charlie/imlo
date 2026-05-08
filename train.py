@@ -7,13 +7,11 @@ from torchvision.transforms import v2
 from torch.utils.data import random_split
 
 transforms = v2.Compose([
-    v2.Resize((64, 64)),
-    #v2.RandomCrop((48, 48)),
+    v2.Resize((224, 224)),
     v2.RandomHorizontalFlip(),
     v2.RandomRotation(15),
     v2.RandomApply([v2.GaussianBlur(3)], p=0.3),
     v2.ToTensor(),
-    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 class Config:
@@ -27,19 +25,23 @@ class PetClassifier(nn.Module):
         super().__init__()
         self.conv_stack = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
 
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
             
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
         )
         self.classifier = nn.Sequential(
             nn.Flatten(),
+            nn.Dropout(0.5),
             nn.LazyLinear(Config.num_classes)
         ) 
 
@@ -81,6 +83,6 @@ if __name__ == "__main__":
         weight_decay = 0.01,
     )
     loss_fn = nn.CrossEntropyLoss()
-    train_loop(train_dataloader, model, loss_fn, optimizer, epochs=5)
+    train_loop(train_dataloader, model, loss_fn, optimizer, epochs=10)
 
     torch.save(model.state_dict(), "model.pth")

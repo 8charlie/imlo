@@ -7,9 +7,8 @@ from torchvision.transforms import v2
 from train import PetClassifier, Config # REMOVE THIS BEFORE SUBMISSION
 
 transforms = v2.Compose([
-    v2.Resize((64, 64)),
+    v2.Resize((224, 224)),
     v2.ToTensor(),
-    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 def test_loop(dataloader, model, loss_fn):
@@ -22,7 +21,7 @@ def test_loop(dataloader, model, loss_fn):
         for X, y in dataloader:
             X, y = X.to(device), y.to(device)
             pred = model(X)
-            loss = loss_fn(pred, y).item()
+            loss += loss_fn(pred, y).item()
             correct += (pred.argmax(1) == y).float().sum().item()
 
     loss /= num_batches
@@ -32,6 +31,7 @@ def test_loop(dataloader, model, loss_fn):
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+    print(device)
 
     testing_data = datasets.OxfordIIITPet(
         root='data', 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     num_classes = len(testing_data.classes)
     test_dataloader = DataLoader(testing_data, batch_size=Config.batch_size, shuffle=True)
 
-    model = PetClassifier()
+    model = PetClassifier().to(device)
     model.load_state_dict(torch.load("model.pth"))
     
     optimizer = optim.AdamW(
