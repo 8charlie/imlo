@@ -4,17 +4,22 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import v2
+from torch.utils.data import random_split
 
 transforms = v2.Compose([
-    v2.Resize((80, 80)),
-    v2.RandomCrop(size=(64, 64)),
+    v2.Resize((64, 64)),
+    #v2.RandomCrop((48, 48)),
+    v2.RandomHorizontalFlip(),
+    v2.RandomRotation(15),
+    v2.RandomApply([v2.GaussianBlur(3)], p=0.3),
     v2.ToTensor(),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 class Config:
     batch_size = 32
     epochs = 5
-    lr = 1e-4
+    lr = 1e-3
     num_classes = 37
 
 class PetClassifier(nn.Module):
@@ -26,6 +31,10 @@ class PetClassifier(nn.Module):
             nn.MaxPool2d(kernel_size=2),
 
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
         )

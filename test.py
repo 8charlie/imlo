@@ -9,6 +9,7 @@ from train import PetClassifier, Config # REMOVE THIS BEFORE SUBMISSION
 transforms = v2.Compose([
     v2.Resize((64, 64)),
     v2.ToTensor(),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 def test_loop(dataloader, model, loss_fn):
