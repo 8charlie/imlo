@@ -6,26 +6,17 @@ from torchvision import datasets
 from torchvision.transforms import v2
 
 transform = v2.Compose([
+    v2.Resize((80, 80)),
     v2.RandomCrop(size=(64, 64)),
-    v2.Resize((64, 64)),
     v2.ToTensor(),
 ])
 
-training_data = datasets.OxfordIIITPet(
-    root='data', 
-    split='trainval',
-    download=True,
-    transform=transform,
-    #shuffle=True,
-)
+class Config:
+    batch_size = 32
+    epochs = 5
+    lr = 1e-4
 
-batch_size = 32
-train_dataloader = DataLoader(training_data, batch_size=batch_size)
-
-device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
-print(f"Using {device} device")
-
-class NeuralNetwork(nn.Module):
+class PetClassifier(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv_stack = nn.Sequential(
@@ -39,7 +30,7 @@ class NeuralNetwork(nn.Module):
         )
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64 * 16 * 16, 37),
+            nn.LazyLinear(num_classes)
         ) 
 
     def forward(self, x):
@@ -48,7 +39,6 @@ class NeuralNetwork(nn.Module):
         return logits
 
 def train(dataloader, model, loss_fn, optimizer, epochs):
-    size = len(dataloader.dataset)
     model.train()
     for epoch in range(epochs): 
         for batch, (X, y) in enumerate(dataloader):
@@ -61,15 +51,27 @@ def train(dataloader, model, loss_fn, optimizer, epochs):
             loss.backward()
             optimizer.step()
 
-model = NeuralNetwork().to(device)
-optimizer = optim.AdamW(
-    model.parameters(),
-    lr = 1e-4,
-    betas = (0.9, 0.999),
-    eps = 1e-8,
-    weight_decay = 0.01,
-)
-loss_fn = nn.CrossEntropyLoss()
+if __name__ == "__main__":
+    device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
 
-train(train_dataloader, model, loss_fn, optimizer, epochs=5)
-torch.save(model.state_dict(), "model.pth")
+    training_data = datasets.OxfordIIITPet(
+        root='data', 
+        split='trainval',
+        download=True,
+        transform=transform,
+    )
+    num_classes = len(training_data.classes)
+    train_dataloader = DataLoader(training_data, batch_size=Config.batch_size, shuffle=True)
+
+    model = PetClassifier().to(device)
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr = Config.lr,
+        betas = (0.9, 0.999),
+        eps = 1e-8,
+        weight_decay = 0.01,
+    )
+    loss_fn = nn.CrossEntropyLoss()
+
+    train(train_dataloader, model, loss_fn, optimizer, epochs=5)
+    torch.save(model.state_dict(), "model.pth")
