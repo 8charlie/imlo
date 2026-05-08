@@ -31,7 +31,6 @@ def test_loop(dataloader, model, loss_fn):
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
-    print(device)
 
     testing_data = datasets.OxfordIIITPet(
         root='data', 

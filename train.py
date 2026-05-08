@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import v2
 from torch.utils.data import random_split
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 transforms = v2.Compose([
     v2.Resize((224, 224)),
@@ -16,7 +17,7 @@ transforms = v2.Compose([
 
 class Config:
     batch_size = 32
-    epochs = 5
+    epochs = 10
     lr = 1e-3
     num_classes = 37
 
@@ -50,7 +51,7 @@ class PetClassifier(nn.Module):
         logits = self.classifier(x)
         return logits
 
-def train_loop(dataloader, model, loss_fn, optimizer, epochs):
+def train_loop(dataloader, model, loss_fn, optimizer, epochs, scheduler):
     model.train()
     for epoch in range(epochs): 
         for batch, (X, y) in enumerate(dataloader):
@@ -62,6 +63,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epochs):
         
             loss.backward()
             optimizer.step()
+        scheduler.step()
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
@@ -83,6 +85,7 @@ if __name__ == "__main__":
         weight_decay = 0.01,
     )
     loss_fn = nn.CrossEntropyLoss()
-    train_loop(train_dataloader, model, loss_fn, optimizer, epochs=10)
+    scheduler = CosineAnnealingLR(optimizer, T_max=Config.epochs)
+    train_loop(train_dataloader, model, loss_fn, optimizer, Config.epochs, scheduler)
 
     torch.save(model.state_dict(), "model.pth")
