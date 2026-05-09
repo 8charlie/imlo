@@ -5,19 +5,21 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import v2
 from torch.utils.data import random_split
-from torch.optim.lr_scheduler import CosineAnnealingLR
 
 transforms = v2.Compose([
     v2.Resize((224, 224)),
     v2.RandomHorizontalFlip(),
     v2.RandomRotation(15),
     v2.RandomApply([v2.GaussianBlur(3)], p=0.3),
-    v2.ToTensor(),
+    v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+    v2.ToImage(),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 class Config:
     batch_size = 32
-    epochs = 10
+    epochs = 30
     lr = 1e-3
     num_classes = 37
 
@@ -39,11 +41,24 @@ class PetClassifier(nn.Module):
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
+
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+#
+#            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
+#            nn.BatchNorm2d(512),
+#            nn.ReLU(),
+#            nn.MaxPool2d(kernel_size=2),
         )
         self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Dropout(0.5),
-            nn.LazyLinear(Config.num_classes)
+            nn.LazyLinear(256),
+            nn.ReLU(),
+            #nn.Dropout(0.5),
+            nn.Linear(256, Config.num_classes),
         ) 
 
     def forward(self, x):
@@ -51,9 +66,10 @@ class PetClassifier(nn.Module):
         logits = self.classifier(x)
         return logits
 
-def train_loop(dataloader, model, loss_fn, optimizer, epochs, scheduler):
+def train_loop(dataloader, model, loss_fn, optimizer, epochs):
     model.train()
     for epoch in range(epochs): 
+        avg_loss = 0
         for batch, (X, y) in enumerate(dataloader):
             optimizer.zero_grad()
 
@@ -63,10 +79,12 @@ def train_loop(dataloader, model, loss_fn, optimizer, epochs, scheduler):
         
             loss.backward()
             optimizer.step()
-        scheduler.step()
+            avg_loss += loss.item()
+        print(f"Epoch {epoch} avg loss: {avg_loss / len(dataloader)}")
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+    print(f"device: {device}")
 
     training_data = datasets.OxfordIIITPet(
         root='data', 
@@ -74,7 +92,7 @@ if __name__ == "__main__":
         download=True,
         transform=transforms,
     )
-    train_dataloader = DataLoader(training_data, batch_size=Config.batch_size, shuffle=True)
+    train_dataloader = DataLoader(training_data, batch_size=Config.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     model = PetClassifier().to(device)
     optimizer = optim.AdamW(
@@ -85,7 +103,6 @@ if __name__ == "__main__":
         weight_decay = 0.01,
     )
     loss_fn = nn.CrossEntropyLoss()
-    scheduler = CosineAnnealingLR(optimizer, T_max=Config.epochs)
-    train_loop(train_dataloader, model, loss_fn, optimizer, Config.epochs, scheduler)
+    train_loop(train_dataloader, model, loss_fn, optimizer, Config.epochs)
 
     torch.save(model.state_dict(), "model.pth")
