@@ -1,7 +1,7 @@
 import torch
 from torch import optim
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torchvision import datasets
 from torchvision.transforms import v2
 from torch.optim.lr_scheduler import OneCycleLR
@@ -18,7 +18,7 @@ transforms = v2.Compose([
 class Config:
     batch_size = 32
     epochs = 30
-    lr = 1e-3
+    lr = 5e-3
     num_classes = 37
 
 class PetClassifier(nn.Module):
@@ -98,6 +98,9 @@ if __name__ == "__main__":
     )
     #image, (label, trimap) = training_data[0]
     train_dataloader = DataLoader(training_data, batch_size=Config.batch_size, num_workers=4, pin_memory=True, shuffle=True)
+    train_size = int(0.8 * len(train_dataloader))
+    test_size = len(train_dataloader) - train_size 
+    train_set, test_set = random_split(train_dataloader, [train_size, test_size])
 
     model = PetClassifier().to(device)
     loss_fn = nn.CrossEntropyLoss()
