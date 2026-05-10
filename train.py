@@ -4,16 +4,12 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import v2
+from torch.optim.lr_scheduler import OneCycleLR
 
 transforms = v2.Compose([
     v2.ToImage(),
-    #v2.Resize((232)),
-    #v2.RandomCrop,
     v2.RandomResizedCrop(224, scale=(0.5, 1.0), antialias=True),
     v2.RandomHorizontalFlip(),
-    #v2.RandomRotation(15),
-    #v2.RandomApply([v2.GaussianBlur(3)], p=0.3),
-    #v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
     v2.TrivialAugmentWide(),
     v2.ToDtype(torch.float32, scale=True),
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -83,6 +79,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epochs):
         
             loss.backward()
             optimizer.step()
+            scheduler.step()
             avg_loss += loss.item()
             correct += (pred.argmax(1) == y).float().sum().item()
             total += y.size(0)
@@ -95,9 +92,11 @@ if __name__ == "__main__":
     training_data = datasets.OxfordIIITPet(
         root='data', 
         split='trainval',
+        #target_types=['category', 'segmentation'],
         download=True,
         transform=transforms,
     )
+    #image, (label, trimap) = training_data[0]
     train_dataloader = DataLoader(training_data, batch_size=Config.batch_size, num_workers=4, pin_memory=True, shuffle=True)
 
     model = PetClassifier().to(device)
@@ -109,6 +108,7 @@ if __name__ == "__main__":
         eps = 1e-8,
         weight_decay = 0.01,
     )
+    scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_dataloader))
     train_loop(train_dataloader, model, loss_fn, optimizer, Config.epochs)
 
     torch.save(model.state_dict(), "model.pth")
