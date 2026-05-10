@@ -1,12 +1,13 @@
+import numpy as np
 import torch
 from torch import optim
 from torch import nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset
 from torchvision import datasets
 from torchvision.transforms import v2
 from torch.optim.lr_scheduler import OneCycleLR
 
-transforms = v2.Compose([
+train_transforms = v2.Compose([
     v2.ToImage(),
     v2.RandomResizedCrop(224, scale=(0.5, 1.0), antialias=True),
     v2.RandomHorizontalFlip(),
@@ -15,10 +16,18 @@ transforms = v2.Compose([
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
+eval_transforms = v2.Compose([
+    v2.ToImage(),
+    v2.Resize(232, antialias=True),
+    v2.CenterCrop(224),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
 class Config:
     batch_size = 32
     epochs = 30
-    lr = 5e-3
+    lr = 1e-3
     num_classes = 37
 
 class PetClassifier(nn.Module):
@@ -64,13 +73,27 @@ class PetClassifier(nn.Module):
         logits = self.classifier(x)
         return logits
 
-def train_loop(dataloader, model, loss_fn, optimizer, epochs):
+def eval_loop(device, dataloader, model, loss_fn):
+    model.eval()
+    correct = 0
+    loss = 0
+    with torch.no_grad():
+        for X, y in dataloader:
+            X, y = X.to(device), y.to(device)
+            pred = model(X)
+            loss += loss_fn(pred, y).item()
+            correct += (pred.argmax(1) == y).float().sum().item()
+    avg_loss = loss / len(dataloader)
+    accuracy = correct / len(dataloader.dataset)
+    return avg_loss, accuracy
+
+def train_loop(device, train_loader, eval_loader, model, loss_fn, optimizer, epochs):
     model.train()
+    best_eval_acc = 0
     for epoch in range(epochs): 
         avg_loss = 0
         correct = 0
-        total = 0
-        for batch, (X, y) in enumerate(dataloader):
+        for batch, (X, y) in enumerate(train_loader):
             optimizer.zero_grad()
 
             X, y = X.to(device), y.to(device)
@@ -82,25 +105,41 @@ def train_loop(dataloader, model, loss_fn, optimizer, epochs):
             scheduler.step()
             avg_loss += loss.item()
             correct += (pred.argmax(1) == y).float().sum().item()
-            total += y.size(0)
-        print(f"Epoch {epoch+1} avg loss: {avg_loss / len(dataloader)}, train acc: {100 * correct / total}")
+        eval_loss, eval_acc = eval_loop(device, eval_loader, model, loss_fn)
+        train_acc = correct / len(train_loader.dataset)
+        train_loss = avg_loss / len(train_loader)
+        print(f"Epoch {epoch+1}: train loss: {train_loss:.4f}, train acc: {train_acc * 100:.2f}% | eval loss: {eval_loss:.4f}, eval acc: {eval_acc * 100:.2f}%")
+        
+        if eval_acc > best_eval_acc:
+            best_eval_acc = eval_acc
+            torch.save(model.state_dict(), "model.pth")
+    print(f"best eval acc: {100 * best_eval_acc}")
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
     print(f"device: {device}")
 
-    training_data = datasets.OxfordIIITPet(
+    train_full = datasets.OxfordIIITPet(
         root='data', 
         split='trainval',
-        #target_types=['category', 'segmentation'],
         download=True,
-        transform=transforms,
+        transform=train_transforms,
     )
-    #image, (label, trimap) = training_data[0]
-    train_dataloader = DataLoader(training_data, batch_size=Config.batch_size, num_workers=4, pin_memory=True, shuffle=True)
-    train_size = int(0.8 * len(train_dataloader))
-    test_size = len(train_dataloader) - train_size 
-    train_set, test_set = random_split(train_dataloader, [train_size, test_size])
+    eval_full = datasets.OxfordIIITPet(
+        root='data',
+        split='trainval',
+        download=True,
+        transform=eval_transforms,
+    )
+    rng = np.random.default_rng(seed=42)
+    indicies = rng.permutation(len(train_full))
+    eval_size = int(0.1 * len(train_full))
+    eval_indicies, train_indicies = indicies[:eval_size], indicies[eval_size:]
+    train_set = Subset(train_full, train_indicies)
+    eval_set = Subset(eval_full, eval_indicies)
+
+    train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     model = PetClassifier().to(device)
     loss_fn = nn.CrossEntropyLoss()
@@ -111,7 +150,7 @@ if __name__ == "__main__":
         eps = 1e-8,
         weight_decay = 0.01,
     )
-    scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_dataloader))
-    train_loop(train_dataloader, model, loss_fn, optimizer, Config.epochs)
+    scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_loader))
+    train_loop(device, train_loader, eval_loader, model, loss_fn, optimizer, Config.epochs)
 
     torch.save(model.state_dict(), "model.pth")
