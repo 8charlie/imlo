@@ -27,7 +27,7 @@ eval_transforms = v2.Compose([
 class Config:
     batch_size = 32
     epochs = 30
-    lr = 1e-3
+    lr = 8e-4
     num_classes = 37
 
 class PetClassifier(nn.Module):
@@ -88,9 +88,9 @@ def eval_loop(device, dataloader, model, loss_fn):
     return avg_loss, accuracy
 
 def train_loop(device, train_loader, eval_loader, model, loss_fn, optimizer, epochs):
-    model.train()
     best_eval_acc = 0
     for epoch in range(epochs): 
+        model.train()
         avg_loss = 0
         correct = 0
         for batch, (X, y) in enumerate(train_loader):
@@ -152,5 +152,3 @@ if __name__ == "__main__":
     )
     scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_loader))
     train_loop(device, train_loader, eval_loader, model, loss_fn, optimizer, Config.epochs)
-
-    torch.save(model.state_dict(), "model.pth")
