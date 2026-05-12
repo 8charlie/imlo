@@ -9,9 +9,9 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 train_transforms = v2.Compose([
     v2.ToImage(),
-    v2.RandomResizedCrop(224, scale=(0.5, 1.0), antialias=True),
+    v2.RandomResizedCrop(224, scale=(0.7, 1.0), antialias=True),
     v2.RandomHorizontalFlip(),
-    v2.TrivialAugmentWide(),
+    #v2.TrivialAugmentWide(),
     v2.ToDtype(torch.float32, scale=True),
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
@@ -27,7 +27,7 @@ eval_transforms = v2.Compose([
 class Config:
     batch_size = 32
     epochs = 30
-    lr = 5e-3
+    lr = 1e-2
     num_classes = 37
 
 class PetClassifier(nn.Module):
@@ -89,6 +89,9 @@ def eval_loop(device, dataloader, model, loss_fn):
 
 def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epochs, eval_loader=None):
     best_eval_acc = 0
+    cutmix = v2.CutMix(num_classes=Config.num_classes, alpha=1.0)
+    mixup=v2.MixUp(num_classes=Config.num_classes, alpha=1.0)
+    cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
     for epoch in range(epochs): 
         model.train()
         avg_loss = 0
@@ -156,7 +159,7 @@ if __name__ == "__main__":
         lr = Config.lr,
         betas = (0.9, 0.999),
         eps = 1e-8,
-        weight_decay = 0.01,
+        weight_decay = 0.005,
     )
     scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_full_loader))
     train_loop(device, train_full_loader, model, loss_fn, optimizer, scheduler, Config.epochs)
