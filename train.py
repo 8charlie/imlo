@@ -27,7 +27,7 @@ eval_transforms = v2.Compose([
 class Config:
     batch_size = 32
     epochs = 30
-    lr = 8e-4
+    lr = 5e-3
     num_classes = 37
 
 class PetClassifier(nn.Module):
@@ -87,7 +87,7 @@ def eval_loop(device, dataloader, model, loss_fn):
     accuracy = correct / len(dataloader.dataset)
     return avg_loss, accuracy
 
-def train_loop(device, train_loader, eval_loader, model, loss_fn, optimizer, epochs):
+def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epochs, eval_loader=None):
     best_eval_acc = 0
     for epoch in range(epochs): 
         model.train()
@@ -105,15 +105,22 @@ def train_loop(device, train_loader, eval_loader, model, loss_fn, optimizer, epo
             scheduler.step()
             avg_loss += loss.item()
             correct += (pred.argmax(1) == y).float().sum().item()
-        eval_loss, eval_acc = eval_loop(device, eval_loader, model, loss_fn)
+        print(f"--- Epoch {epoch+1} ---")
         train_acc = correct / len(train_loader.dataset)
         train_loss = avg_loss / len(train_loader)
-        print(f"Epoch {epoch+1}: train loss: {train_loss:.4f}, train acc: {train_acc * 100:.2f}% | eval loss: {eval_loss:.4f}, eval acc: {eval_acc * 100:.2f}%")
-        
-        if eval_acc > best_eval_acc:
-            best_eval_acc = eval_acc
-            torch.save(model.state_dict(), "model.pth")
-    print(f"best eval acc: {100 * best_eval_acc}")
+        print(f"train loss: {train_loss:.4f}, train acc: {train_acc * 100:.2f}%")
+        if eval_loader is not None:
+            eval_loss, eval_acc = eval_loop(device, eval_loader, model, loss_fn)
+            print(f"eval loss: {eval_loss:.4f}, eval acc: {eval_acc * 100:.2f}%")
+            if eval_acc > best_eval_acc:
+                best_eval_acc = eval_acc
+                torch.save(model.state_dict(), "model.pth")
+        #print(f"Epoch {epoch+1}: train loss: {train_loss:.4f}, train acc: {train_acc * 100:.2f}% | eval loss: {eval_loss:.4f}, eval acc: {eval_acc * 100:.2f}%")
+
+    if eval_loader is None:
+        torch.save(model.state_dict(), "model.pth")
+    else:
+        print(f"best eval acc: {100 * best_eval_acc}")
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
@@ -138,6 +145,7 @@ if __name__ == "__main__":
     train_set = Subset(train_full, train_indicies)
     eval_set = Subset(eval_full, eval_indicies)
 
+    train_full_loader = DataLoader(train_full, batch_size=Config.batch_size, shuffle=True, num_workers=4, pin_memory=True)
     train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=4, pin_memory=True)
     eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
@@ -150,5 +158,5 @@ if __name__ == "__main__":
         eps = 1e-8,
         weight_decay = 0.01,
     )
-    scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_loader))
-    train_loop(device, train_loader, eval_loader, model, loss_fn, optimizer, Config.epochs)
+    scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_full_loader))
+    train_loop(device, train_full_loader, model, loss_fn, optimizer, scheduler, Config.epochs)
