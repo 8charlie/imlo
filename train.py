@@ -11,8 +11,8 @@ train_transforms = v2.Compose([
     v2.ToImage(),
     v2.RandomResizedCrop(224, scale=(0.7, 1.0), antialias=True),
     v2.RandomHorizontalFlip(),
-    v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
-    v2.RandomRotation(15),
+    #v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+    #v2.RandomRotation(15),
     #v2.RandomErasing(p=0.3, scale=(0.02, 0.15)),
     v2.ToDtype(torch.float32, scale=True),
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -29,7 +29,7 @@ eval_transforms = v2.Compose([
 class Config:
     batch_size = 32
     epochs = 30
-    lr = 1e-3
+    lr = 1e-2
     num_classes = 37
 
 class PetClassifier(nn.Module):
@@ -66,7 +66,7 @@ class PetClassifier(nn.Module):
             nn.Flatten(),
             nn.LazyLinear(256),
             nn.ReLU(),
-            nn.Dropout(0.1),
+            #nn.Dropout(0.1),
             nn.Linear(256, Config.num_classes),
         ) 
 
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     )
     rng = np.random.default_rng(seed=42)
     indicies = rng.permutation(len(train_full))
-    eval_size = int(0.2 * len(train_full))
+    eval_size = int(0.1 * len(train_full))
     eval_indicies, train_indicies = indicies[:eval_size], indicies[eval_size:]
     train_set = Subset(train_full, train_indicies)
     eval_set = Subset(eval_full, eval_indicies)
@@ -162,7 +162,7 @@ if __name__ == "__main__":
         lr = Config.lr,
         betas = (0.9, 0.999),
         eps = 1e-8,
-        weight_decay = 0.01,
+        weight_decay = 0.005,
     )
-    scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_loader))
-    train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, Config.epochs, eval_loader)
+    scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_full_loader))
+    train_loop(device, train_full_loader, model, loss_fn, optimizer, scheduler, Config.epochs)
