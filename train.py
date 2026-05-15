@@ -35,7 +35,7 @@ class PetClassifier(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv_stack = nn.Sequential(
-            nn.Conv2d(3, 64, 3, padding=1),
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
@@ -63,8 +63,7 @@ class PetClassifier(nn.Module):
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            #nn.LazyLinear(256),
-            nn.ReLU(),
+            #nn.ReLU(),
             nn.Linear(512, Config.num_classes),
         ) 
 
