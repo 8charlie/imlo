@@ -15,7 +15,6 @@ train_transforms = v2.Compose([
     v2.RandomRotation(15),
     v2.ToDtype(torch.float32, scale=True),
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    #v2.RandomErasing(p=0.25, scale=(0.02, 0.15)),
 ])
 
 eval_transforms = v2.Compose([
@@ -59,7 +58,6 @@ class PetClassifier(nn.Module):
             nn.Conv2d(512, 512, 3, padding=1),
             nn.BatchNorm2d(512),
             nn.ReLU(),
-            #nn.MaxPool2d(kernel_size=2),
         )
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
@@ -89,6 +87,7 @@ def eval_loop(device, dataloader, model, loss_fn):
 
 def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epochs, eval_loader=None):
     best_eval_acc = 0
+    learning_rates = []
     for epoch in range(epochs): 
         model.train()
         avg_loss = 0
@@ -115,11 +114,13 @@ def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epoch
             if eval_acc > best_eval_acc:
                 best_eval_acc = eval_acc
                 torch.save(model.state_dict(), "model.pth")
+        learning_rates.append(f"{optimizer.param_groups[0]['lr']:.2e}")
 
     if eval_loader is None:
         torch.save(model.state_dict(), "model.pth")
     else:
         print(f"best eval acc: {100 * best_eval_acc}")
+    print(learning_rates)
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
