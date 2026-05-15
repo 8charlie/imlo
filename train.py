@@ -9,10 +9,12 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 train_transforms = v2.Compose([
     v2.ToImage(),
-    v2.RandomResizedCrop(224, scale=(0.7, 1.0), antialias=True),
+    v2.RandomResizedCrop(224, scale=(0.5, 1.0), antialias=True),
     v2.RandomHorizontalFlip(),
+    #v2.RandomRotation(15),
     v2.ToDtype(torch.float32, scale=True),
-    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    #v2.RandomErasing(p=0.25, scale=(0.02, 0.15)),
 ])
 
 eval_transforms = v2.Compose([
@@ -61,9 +63,9 @@ class PetClassifier(nn.Module):
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.LazyLinear(256),
+            #nn.LazyLinear(256),
             nn.ReLU(),
-            nn.Linear(256, Config.num_classes),
+            nn.Linear(512, Config.num_classes),
         ) 
 
     def forward(self, x):
@@ -142,9 +144,9 @@ if __name__ == "__main__":
     train_set = Subset(train_full, train_indicies)
     eval_set = Subset(eval_full, eval_indicies)
 
-    train_full_loader = DataLoader(train_full, batch_size=Config.batch_size, shuffle=True, num_workers=0, pin_memory=True)
-    train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=0, pin_memory=True)
-    eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    train_full_loader = DataLoader(train_full, batch_size=Config.batch_size, shuffle=True, num_workers=2, persistent_workers=True, pin_memory=True)
+    train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=2, persistent_workers=True, pin_memory=True)
+    eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=2, persistent_workers=True, pin_memory=True)
 
     model = PetClassifier().to(device)
     loss_fn = nn.CrossEntropyLoss()
