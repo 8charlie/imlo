@@ -11,7 +11,8 @@ train_transforms = v2.Compose([
     v2.ToImage(),
     v2.RandomResizedCrop(224, scale=(0.5, 1.0), antialias=True),
     v2.RandomHorizontalFlip(),
-    #v2.RandomRotation(15),
+    v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+    v2.RandomRotation(15),
     v2.ToDtype(torch.float32, scale=True),
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     #v2.RandomErasing(p=0.25, scale=(0.02, 0.15)),
@@ -58,12 +59,12 @@ class PetClassifier(nn.Module):
             nn.Conv2d(512, 512, 3, padding=1),
             nn.BatchNorm2d(512),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2),
+            #nn.MaxPool2d(kernel_size=2),
         )
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            #nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(512, Config.num_classes),
         ) 
 
@@ -148,7 +149,7 @@ if __name__ == "__main__":
     eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=2, persistent_workers=True, pin_memory=True)
 
     model = PetClassifier().to(device)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = optim.AdamW(
         model.parameters(),
         lr = Config.lr,
