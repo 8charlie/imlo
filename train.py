@@ -11,9 +11,6 @@ train_transforms = v2.Compose([
     v2.ToImage(),
     v2.RandomResizedCrop(224, scale=(0.7, 1.0), antialias=True),
     v2.RandomHorizontalFlip(),
-    #v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
-    #v2.RandomRotation(15),
-    #v2.RandomErasing(p=0.3, scale=(0.02, 0.15)),
     v2.ToDtype(torch.float32, scale=True),
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
@@ -66,7 +63,6 @@ class PetClassifier(nn.Module):
             nn.Flatten(),
             nn.LazyLinear(256),
             nn.ReLU(),
-            #nn.Dropout(0.1),
             nn.Linear(256, Config.num_classes),
         ) 
 
@@ -91,9 +87,6 @@ def eval_loop(device, dataloader, model, loss_fn):
 
 def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epochs, eval_loader=None):
     best_eval_acc = 0
-    cutmix = v2.CutMix(num_classes=Config.num_classes, alpha=1.0)
-    mixup=v2.MixUp(num_classes=Config.num_classes, alpha=1.0)
-    cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
     for epoch in range(epochs): 
         model.train()
         avg_loss = 0
@@ -102,7 +95,6 @@ def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epoch
             optimizer.zero_grad()
 
             X, y = X.to(device), y.to(device)
-            #X, y = cutmix_or_mixup(X, y)
             pred = model(X)
             loss = loss_fn(pred, y)
         
@@ -121,7 +113,6 @@ def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epoch
             if eval_acc > best_eval_acc:
                 best_eval_acc = eval_acc
                 torch.save(model.state_dict(), "model.pth")
-        #print(f"Epoch {epoch+1}: train loss: {train_loss:.4f}, train acc: {train_acc * 100:.2f}% | eval loss: {eval_loss:.4f}, eval acc: {eval_acc * 100:.2f}%")
 
     if eval_loader is None:
         torch.save(model.state_dict(), "model.pth")
@@ -151,9 +142,9 @@ if __name__ == "__main__":
     train_set = Subset(train_full, train_indicies)
     eval_set = Subset(eval_full, eval_indicies)
 
-    train_full_loader = DataLoader(train_full, batch_size=Config.batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    train_full_loader = DataLoader(train_full, batch_size=Config.batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
     model = PetClassifier().to(device)
     loss_fn = nn.CrossEntropyLoss()

@@ -53,10 +53,13 @@ class PetClassifier(nn.Module):
             nn.Flatten(),
             nn.LazyLinear(256),
             nn.ReLU(),
-            #nn.Dropout(0.1),
             nn.Linear(256, Config.num_classes),
         ) 
 
+    def forward(self, x):
+        x = self.conv_stack(x)
+        logits = self.classifier(x)
+        return logits
 
 def test_loop(device, dataloader, model, loss_fn):
     model.eval()
@@ -83,7 +86,7 @@ if __name__ == "__main__":
         transform=transforms,
     )
     num_classes = len(testing_data.classes)
-    test_dataloader = DataLoader(testing_data, batch_size=Config.batch_size, shuffle=False)
+    test_dataloader = DataLoader(testing_data, batch_size=Config.batch_size, shuffle=False, num_workers=0)
 
     model = PetClassifier().to(device)
     model.load_state_dict(torch.load("model.pth"))
