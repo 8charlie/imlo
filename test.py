@@ -71,8 +71,7 @@ def test_loop(device, dataloader, model, loss_fn):
             correct += (pred.argmax(1) == y).float().sum().item()
     accuracy = correct / len(dataloader.dataset)
     avg_loss = loss / len(dataloader)
-    print(f"test loss = {avg_loss:.4f}, test acc = {100 * (accuracy):.2f}%")
-
+    return accuracy, avg_loss
 
 if __name__ == "__main__":
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
@@ -90,4 +89,5 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load("model.pth"))
     
     loss_fn = nn.CrossEntropyLoss()
-    test_loop(device, test_dataloader, model, loss_fn)
+    test_acc, test_loss = test_loop(device, test_dataloader, model, loss_fn)
+    print(f"Accuracy of model on test dataset: {test_acc * 100:.2f}%")

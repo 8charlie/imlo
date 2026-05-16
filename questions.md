@@ -11,5 +11,5 @@
 11) ToImage, RandomResizedCrop, RandomHorizontalFlip, ColorJitter, RandomRotation, ToDtype, Normalize
 12) 3680
 13) 0
-14) 90.98%
+14) 98.21%
 15) 67.70%

@@ -129,7 +129,7 @@ def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epoch
         torch.save(model.state_dict(), "model.pth")
     else:
         print(f"best eval acc: {100 * best_eval_acc}")
-    print(learning_rates)
+    print(f"\n---Learning rates---\n {learning_rates}")
 
 if __name__ == "__main__":
     set_seed(42)
@@ -171,3 +171,8 @@ if __name__ == "__main__":
     )
     scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_full_loader))
     train_loop(device, train_full_loader, model, loss_fn, optimizer, scheduler, Config.epochs, eval_loader=None)
+
+    # To calculate the accuracy of the trained model on the train dataset
+    test_train_loader = DataLoader(eval_full, batch_size=Config.batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    test_train_loss, test_train_acc = eval_loop(device, test_train_loader, model, loss_fn)
+    print(f"\nAccuracy of saved model on full training dataset: {test_train_acc * 100:.2f}%")
