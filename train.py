@@ -1,3 +1,4 @@
+import random
 import numpy as np
 import torch
 from torch import optim
@@ -6,6 +7,14 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets
 from torchvision.transforms import v2
 from torch.optim.lr_scheduler import OneCycleLR
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 train_transforms = v2.Compose([
     v2.ToImage(),
@@ -35,7 +44,7 @@ class PetClassifier(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv_stack = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
+            nn.Conv2d(3, 64, 7, stride=2, padding=3),
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
@@ -123,6 +132,8 @@ def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, epoch
     print(learning_rates)
 
 if __name__ == "__main__":
+    set_seed(42)
+
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
     print(f"device: {device}")
 
@@ -145,9 +156,9 @@ if __name__ == "__main__":
     train_set = Subset(train_full, train_indicies)
     eval_set = Subset(eval_full, eval_indicies)
 
-    train_full_loader = DataLoader(train_full, batch_size=Config.batch_size, shuffle=True, num_workers=2, persistent_workers=True, pin_memory=True)
-    train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=2, persistent_workers=True, pin_memory=True)
-    eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=2, persistent_workers=True, pin_memory=True)
+    train_full_loader = DataLoader(train_full, batch_size=Config.batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    train_loader = DataLoader(train_set, batch_size=Config.batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    eval_loader = DataLoader(eval_set, batch_size=Config.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
     model = PetClassifier().to(device)
     loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
@@ -159,4 +170,4 @@ if __name__ == "__main__":
         weight_decay = 0.005,
     )
     scheduler = OneCycleLR(optimizer, max_lr=Config.lr, epochs=Config.epochs, steps_per_epoch=len(train_full_loader))
-    train_loop(device, train_full_loader, model, loss_fn, optimizer, scheduler, Config.epochs)
+    train_loop(device, train_full_loader, model, loss_fn, optimizer, scheduler, Config.epochs, eval_loader=None)

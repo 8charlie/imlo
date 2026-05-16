@@ -4,7 +4,6 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import v2
-from train import Config, PetClassifier
 
 transforms = v2.Compose([
     v2.ToImage(),
@@ -13,6 +12,52 @@ transforms = v2.Compose([
     v2.ToDtype(torch.float32, scale=True),
     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
+
+class Config:
+    batch_size = 32
+    epochs = 30
+    lr = 1e-2
+    num_classes = 37
+
+class PetClassifier(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv_stack = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+
+            nn.Conv2d(64, 128, 3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            
+            nn.Conv2d(128, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+
+            nn.Conv2d(256, 512, 3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+
+            nn.Conv2d(512, 512, 3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+        )
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Dropout(0.2),
+            nn.Linear(512, Config.num_classes),
+        ) 
+
+    def forward(self, x):
+        x = self.conv_stack(x)
+        logits = self.classifier(x)
+        return logits
 
 def test_loop(device, dataloader, model, loss_fn):
     model.eval()
