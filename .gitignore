@@ -1,3 +1,10 @@
 root/
 .vscode/
 data/
+.venv/
+__pycache__/
+experiment_checkpoints/**/*.pth
+experiment_checkpoints/**/*.pt
+experiment_checkpoints/**/queue.pid
+# assessment documents: the brief (p.2) forbids sharing them
+*.pdf
