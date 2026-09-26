@@ -1,16 +1,3 @@
-"""ResNet-18 for Oxford-IIIT Pet (37 classes), plus the evaluation that train.py
-and test.py share.
-
-Layout follows the 18-layer network in He et al. 2016, "Deep Residual Learning
-for Image Recognition" (https://arxiv.org/abs/1512.03385), Table 1: a 7x7
-stride-2 stem and 3x3 max pool, then four stages of two basic blocks with 64,
-128, 256 and 512 channels. Stages 2-4 halve the resolution in their first block
-and project the shortcut with a 1x1 convolution + BN (option B in the paper).
-Convolutions have no bias because each is followed by BatchNorm. Convolution
-weights use He normal initialisation (He et al. 2015,
-https://arxiv.org/abs/1502.01852).
-"""
-
 import torch
 from torch import nn
 from torchvision.transforms import v2
@@ -27,7 +14,9 @@ class BasicBlock(nn.Module):
 
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride=stride, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_channels, out_channels, 3, stride=stride, padding=1, bias=False
+        )
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -48,7 +37,12 @@ class PetClassifier(nn.Module):
     """ResNet-18. The final layer is named `classifier`: train.py gives it AdamW
     instead of Muon by that name."""
 
-    def __init__(self, num_classes=NUM_CLASSES, widths=(64, 128, 256, 512), blocks_per_stage=(2, 2, 2, 2)):
+    def __init__(
+        self,
+        num_classes=NUM_CLASSES,
+        widths=(64, 128, 256, 512),
+        blocks_per_stage=(2, 2, 2, 2),
+    ):
         super().__init__()
         self.stem = nn.Sequential(
             nn.Conv2d(3, widths[0], 7, stride=2, padding=3, bias=False),
@@ -67,7 +61,9 @@ class PetClassifier(nn.Module):
         self.classifier = nn.Linear(in_channels, num_classes)
         for module in self.modules():
             if isinstance(module, nn.Conv2d):
-                nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
+                nn.init.kaiming_normal_(
+                    module.weight, mode="fan_out", nonlinearity="relu"
+                )
 
     def forward(self, x):
         x = self.stages(self.stem(x))
@@ -79,13 +75,15 @@ class EvalViews:
 
     def __init__(self):
         self.views = [
-            v2.Compose([
-                v2.ToImage(),
-                v2.Resize(size, antialias=True),
-                v2.CenterCrop(224),
-                v2.ToDtype(torch.float32, scale=True),
-                v2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
-            ])
+            v2.Compose(
+                [
+                    v2.ToImage(),
+                    v2.Resize(size, antialias=True),
+                    v2.CenterCrop(224),
+                    v2.ToDtype(torch.float32, scale=True),
+                    v2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
+                ]
+            )
             for size in EVAL_RESIZES
         ]
 
