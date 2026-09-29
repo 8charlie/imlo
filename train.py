@@ -60,7 +60,7 @@ class IndexedDataset(Dataset):
 
 def orthogonalise(matrix, steps=5):
     """Quintic Newton-Schulz iteration approximating the polar factor U V^T of a
-    matrix, with the coefficients from Jordan et al. 2024 (see MuonWithAdamW)."""
+    matrix, with the coefficients from Jordan et al. 2024 (see Muon)."""
     a, b, c = 3.4445, -4.7750, 2.0315
     x = matrix.float()
     tall = x.size(0) > x.size(1)
@@ -73,72 +73,51 @@ def orthogonalise(matrix, steps=5):
     return x.T if tall else x
 
 
-class MuonWithAdamW(torch.optim.Optimizer):
-    def __init__(self, param_groups, lr, weight_decay, betas=(0.9, 0.999), eps=1e-8):
+class Muon(torch.optim.Optimizer):
+    """Muon (https://kellerjordan.github.io/posts/muon/), written
+    from the published equations: Nesterov momentum, then each update is
+    orthogonalised so every direction gets a comparable step. Convolution filters are
+    flattened to (out, in * kh * kw) matrices; torch.optim.Muon only accepts 2D weights.
+    Updates are scaled by 0.2 * sqrt(max(rows, cols)) to match AdamW's update size
+    (Liu et al. 2025, https://arxiv.org/abs/2502.16982), so both optimisers can share
+    one learning rate and weight decay."""
+
+    def __init__(self, params, lr, weight_decay, momentum=0.9):
         super().__init__(
-            param_groups,
-            dict(lr=lr, weight_decay=weight_decay, betas=betas, eps=eps, muon=False),
+            params, dict(lr=lr, weight_decay=weight_decay, momentum=momentum)
         )
 
     @torch.no_grad()
     def step(self):
         for group in self.param_groups:
-            lr, decay, (beta1, beta2), eps = (
-                group["lr"],
-                group["weight_decay"],
-                group["betas"],
-                group["eps"],
-            )
-            for parameter in group["params"]:
-                grad = parameter.grad
-                if grad is None:
+            lr, beta = group["lr"], group["momentum"]
+            for weight in group["params"]:
+                if weight.grad is None:
                     continue
-                state = self.state[parameter]
-                parameter.mul_(1 - lr * decay)
-                if group["muon"]:
-                    momentum = state.setdefault("momentum", torch.zeros_like(parameter))
-                    momentum.lerp_(grad, 1 - beta1)
-                    direction = grad.lerp(momentum, beta1).reshape(len(grad), -1)
-                    scale = 0.2 * math.sqrt(max(direction.shape))
-                    parameter.add_(
-                        orthogonalise(direction).view_as(parameter), alpha=-lr * scale
-                    )
-                else:
-                    if not state:
-                        state["step"] = 0
-                        state["exp_avg"] = torch.zeros_like(parameter)
-                        state["exp_avg_sq"] = torch.zeros_like(parameter)
-                    state["step"] += 1
-                    state["exp_avg"].lerp_(grad, 1 - beta1)
-                    state["exp_avg_sq"].mul_(beta2).addcmul_(
-                        grad, grad, value=1 - beta2
-                    )
-                    denominator = (
-                        (state["exp_avg_sq"] / (1 - beta2 ** state["step"]))
-                        .sqrt_()
-                        .add_(eps)
-                    )
-                    parameter.addcdiv_(
-                        state["exp_avg"],
-                        denominator,
-                        value=-lr / (1 - beta1 ** state["step"]),
-                    )
+                buffer = self.state[weight].setdefault(
+                    "momentum", torch.zeros_like(weight)
+                )
+                buffer.lerp_(weight.grad, 1 - beta)
+                update = weight.grad.lerp(buffer, beta).flatten(1)  # Nesterov
+                scale = 0.2 * math.sqrt(max(update.shape))
+                weight.mul_(1 - lr * group["weight_decay"])
+                weight.add_(orthogonalise(update).view_as(weight), alpha=-lr * scale)
 
 
-def build_optimizer(model):
-    """Muon for the convolution weights; AdamW for the classifier, BatchNorm and biases."""
-    convs, others = [], []
-    for name, parameter in model.named_parameters():
-        is_conv = parameter.ndim >= 2 and not name.startswith("classifier")
-        (convs if is_conv else others).append(parameter)
-    return MuonWithAdamW(
-        [dict(params=convs, muon=True), dict(params=others)],
-        lr=Config.lr,
-        weight_decay=Config.weight_decay,
-    )
+def build_optimizers(model):
+    """Muon for the convolution weights, AdamW for the rest (BatchNorm, classifier)."""
+    convs = [m.weight for m in model.modules() if isinstance(m, nn.Conv2d)]
+    conv_ids = {id(weight) for weight in convs}
+    others = [p for p in model.parameters() if id(p) not in conv_ids]
+    return [
+        Muon(convs, lr=Config.lr, weight_decay=Config.weight_decay),
+        torch.optim.AdamW(others, lr=Config.lr, weight_decay=Config.weight_decay),
+    ]
 
 
-def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, flip_parity):
+def train_loop(
+    device, train_loader, model, loss_fn, optimizers, schedulers, flip_parity
+):
     learning_rates = []
     for epoch in range(Config.epochs):
         model.train()
@@ -152,11 +131,12 @@ def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, flip_
             X = torch.where(flip[:, None, None, None], X.flip(-1), X)
             pred = model(X)
             loss = loss_fn(pred, y)
-            optimizer.zero_grad(set_to_none=True)
+            model.zero_grad(set_to_none=True)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), Config.grad_clip)
-            optimizer.step()
-            scheduler.step()
+            for optimizer, scheduler in zip(optimizers, schedulers):
+                optimizer.step()
+                scheduler.step()
             total_loss += loss.item() * len(y)
             correct += (pred.argmax(1) == y).sum().item()
         print(f"--- Epoch {epoch + 1} ---")
@@ -166,7 +146,7 @@ def train_loop(device, train_loader, model, loss_fn, optimizer, scheduler, flip_
             f"train loss: {train_loss:.4f}, train acc: {train_acc * 100:.2f}%",
             flush=True,
         )
-        learning_rates.append(f"{optimizer.param_groups[0]['lr']:.2e}")
+        learning_rates.append(f"{schedulers[0].get_last_lr()[0]:.2e}")
     return learning_rates
 
 
@@ -200,14 +180,19 @@ if __name__ == "__main__":
     )
 
     model = PetClassifier().to(device)
-    optimizer = build_optimizer(model)
-    scheduler = OneCycleLR(
-        optimizer,
-        max_lr=Config.lr,
-        total_steps=Config.epochs * len(train_loader),
-        pct_start=Config.warmup,
-        final_div_factor=1e4,
-    )
+    optimizers = build_optimizers(model)
+    # One identical schedule per optimiser. OneCycleLR also cycles the momentum:
+    # Muon's `momentum` and AdamW's first beta.
+    schedulers = [
+        OneCycleLR(
+            optimizer,
+            max_lr=Config.lr,
+            total_steps=Config.epochs * len(train_loader),
+            pct_start=Config.warmup,
+            final_div_factor=1e4,
+        )
+        for optimizer in optimizers
+    ]
     loss_fn = nn.CrossEntropyLoss(label_smoothing=Config.label_smoothing)
     flip_parity = torch.randint(
         0,
@@ -217,12 +202,12 @@ if __name__ == "__main__":
     )
 
     learning_rates = train_loop(
-        device, train_loader, model, loss_fn, optimizer, scheduler, flip_parity
+        device, train_loader, model, loss_fn, optimizers, schedulers, flip_parity
     )
     torch.save({k: v.cpu() for k, v in model.state_dict().items()}, "model.pth")
     print(f"\n---Learning rates---\n {learning_rates}")
 
-    # Accuracy of the saved model on the full training dataset, evaluated exactly like test.py
+    # Accuracy of the saved model on the full training dataset
     eval_data = datasets.OxfordIIITPet(
         root="data", split="trainval", download=True, transform=EvalViews()
     )
