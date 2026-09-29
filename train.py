@@ -21,6 +21,7 @@ class Config:
     label_smoothing = 0.1
     grad_clip = 5.0
     warmup = 0.3  # fraction of steps spent raising the learning rate
+    muon = True  # False: AdamW for every parameter
     num_workers = min(8, os.cpu_count() or 1)
 
 
@@ -105,7 +106,14 @@ class Muon(torch.optim.Optimizer):
 
 
 def build_optimizers(model):
-    """Muon for the convolution weights, AdamW for the rest (BatchNorm, classifier)."""
+    """Muon for the convolution weights, AdamW for the rest (BatchNorm, classifier).
+    With Config.muon off, AdamW for every parameter."""
+    if not Config.muon:
+        return [
+            torch.optim.AdamW(
+                model.parameters(), lr=Config.lr, weight_decay=Config.weight_decay
+            )
+        ]
     convs = [m.weight for m in model.modules() if isinstance(m, nn.Conv2d)]
     conv_ids = {id(weight) for weight in convs}
     others = [p for p in model.parameters() if id(p) not in conv_ids]
