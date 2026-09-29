@@ -35,7 +35,7 @@ def set_seed(seed):
 train_transforms = v2.Compose(
     [
         v2.ToImage(),
-        v2.RandomResizedCrop(224, scale=(0.5, 1.0), antialias=True),
+        v2.RandomResizedCrop(224, scale=(0.35, 1.0), antialias=True),
         v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
         v2.RandomRotation(15),
         v2.ToDtype(torch.float32, scale=True),
