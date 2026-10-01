@@ -1,4 +1,4 @@
-name: imlo-coursework-gpu
+name: muon-pets
 channels:
     - defaults
 dependencies:

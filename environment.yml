@@ -1,4 +1,4 @@
-name: imlo-coursework
+name: muon-pets
 channels:
     - defaults
 dependencies:
