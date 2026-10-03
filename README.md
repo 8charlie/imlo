@@ -2,7 +2,7 @@
 
 A ResNet-18 trained from random initialisation on the [Oxford-IIIT Pet](https://www.robots.ox.ac.uk/~vgg/data/pets/) dataset, reaching 82% test accuracy in 30 epochs using only the 3,680-image training split.
 
-Uses a custom implementation of the [Muon](https://kellerjordan.github.io/posts/muon/) optimiser for the convolutional layers, with AdamW for the rest, instead of AdamW alone. This improved test accuracy by 18 percentage points over a tuned AdamW baseline (82% vs 64%). (AdamW essentially underfit every learning rate)
+Uses a custom implementation of the [Muon](https://kellerjordan.github.io/posts/muon/) optimiser for the convolutional layers, with AdamW for the rest. This improved test accuracy by 18 percentage points over a tuned AdamW baseline (82% vs 64%).
 
 ## Results
 
@@ -43,6 +43,6 @@ Set `Config.muon = False` in `train.py` to train with AdamW. Set `Config.seed` t
 
 ## References
 
-Jordan, K. (2024). [94% on CIFAR-10 in 3.29 seconds on a single GPU](https://arxiv.org/abs/2404.00498). arXiv:2404.00498. (Alternating flip)
+- Jordan, K. (2024). [94% on CIFAR-10 in 3.29 seconds on a single GPU](https://arxiv.org/abs/2404.00498). arXiv:2404.00498. (Alternating flip)
 - Jordan, K., Jin, Y., Boza, V., You, J., Cesista, F., Newhouse, L., & Bernstein, J. (2024). [Muon: An optimizer for hidden layers in neural networks](https://kellerjordan.github.io/posts/muon/). Blog post. (Muon, Newton–Schulz coefficients)
 - Liu, J., Su, J., Yao, X., et al. (2025). [Muon is scalable for LLM training](https://arxiv.org/abs/2502.16982). arXiv:2502.16982. (Update scaling by 0.2·√max(m, n))
