@@ -17,13 +17,18 @@ Accuracy of a few models on the 3,669-image test split. These averages were take
 ## Method
 
 **Model.** ResNet-18 implemented in `model.py`: basic residual blocks, widths 64-512, Kaiming initialisation.
+
 **Optimiser.** `MuonWithAdamW` in `train.py`:
-    - Muon for the convolutional weights: Nesterov momentum, then 5 Newton-Schulz iterations to orthogonalise each update (coefficients from Jordan et al.), scaled by 0.2·√max(m, n) so it can share a learning rate with AdamW.
-    - AdamW for the classifier, BatchNorm parameters and biases.
+    - Muon for the convolutional weights: Nesterov momentum, then 5 Newton-Schulz iterations to orthogonalise each update (coefficients from Jordan et al.), scaled by 0.2·√max(m, n) (Liu et al., 2025) so it can share a learning rate with AdamW.
+    - AdamW for the classifier and BatchNorm parameters
     - Decoupled weight decay of 0.02 for both.
+
 **Training.** Batch size 16; one-cycle schedule peaking at 6e-3 with 30% warm-up; label smoothing 0.1; gradient clipping at 5.
-**Augmentation.** Random resized crops (scale 0.35-1), colour jitter, rotation up to 15°, and alternating horizontal flips where each image is mirroed on every other epoch rather than at random (Jordan, 2024).
+
+**Augmentation.** Random resized crops (scale 0.35-1), colour jitter, rotation up to 15°, and alternating horizontal flips where each image is mirrored on every other epoch rather than at random (Jordan, 2024).
+
 **Evaluation.** Logits averaged over two centre crops, with images resized to 248 and 256 then cropped to 224.
+
 **Hyperparameters.** Tuned on 15% of trainval; final model was retrained on 3,680 images.
 
 ## Reproducing
@@ -35,3 +40,9 @@ python train.py   # trains and saves model.pth
 python test.py    # [evaluates model.pth on the test split]
 ```
 Set `Config.muon = False` in `train.py` to train with AdamW. Set `Config.seed` to set the seed.
+
+## References
+
+Jordan, K. (2024). [94% on CIFAR-10 in 3.29 seconds on a single GPU](https://arxiv.org/abs/2404.00498). arXiv:2404.00498. (Alternating flip)
+- Jordan, K., Jin, Y., Boza, V., You, J., Cesista, F., Newhouse, L., & Bernstein, J. (2024). [Muon: An optimizer for hidden layers in neural networks](https://kellerjordan.github.io/posts/muon/). Blog post. (Muon, Newton–Schulz coefficients)
+- Liu, J., Su, J., Yao, X., et al. (2025). [Muon is scalable for LLM training](https://arxiv.org/abs/2502.16982). arXiv:2502.16982. (Update scaling by 0.2·√max(m, n))
